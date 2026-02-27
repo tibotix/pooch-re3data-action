@@ -1,0 +1,91 @@
+name: Validate re3data Action
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run action (no blacklist)
+        id: run_unfiltered
+        uses: ./
+        env:
+          # Prevent the composite action from pushing during validation.
+          GITHUB_REF: refs/pull/validate/merge
+        with:
+          software: Dataverse
+          filename: tmp/all_urls.txt
+
+      - name: Assert at least one URL is returned
+        id: collect
+        shell: bash
+        run: |
+          set -euo pipefail
+          file="tmp/all_urls.txt"
+
+          if [ ! -f "$file" ]; then
+            echo "Missing output file: $file"
+            exit 1
+          fi
+
+          count=$(grep -cve '^[[:space:]]*$' "$file" || true)
+          if [ "$count" -lt 1 ]; then
+            echo "Expected at least 1 URL, got $count."
+            exit 1
+          fi
+
+          first_url=$(head -n 1 "$file")
+          if [ -z "$first_url" ]; then
+            echo "First URL is empty."
+            exit 1
+          fi
+
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "blacklist_pattern=$first_url" >> "$GITHUB_OUTPUT"
+
+      - name: Run action (with blacklist)
+        id: run_filtered
+        uses: ./
+        env:
+          # Prevent the composite action from pushing during validation.
+          GITHUB_REF: refs/pull/validate/merge
+        with:
+          software: Dataverse
+          filename: tmp/filtered_urls.txt
+          blacklist: ${{ steps.collect.outputs.blacklist_pattern }}
+
+      - name: Assert blacklist filtering
+        shell: bash
+        run: |
+          set -euo pipefail
+          all_file="tmp/all_urls.txt"
+          filtered_file="tmp/filtered_urls.txt"
+          pattern="${{ steps.collect.outputs.blacklist_pattern }}"
+          all_count="${{ steps.collect.outputs.count }}"
+
+          if [ ! -f "$filtered_file" ]; then
+            echo "Missing filtered output file: $filtered_file"
+            exit 1
+          fi
+
+          if ! grep -Fqx "$pattern" "$all_file"; then
+            echo "Sanity check failed: blacklist pattern not found in unfiltered output."
+            exit 1
+          fi
+
+          if grep -Fq "$pattern" "$filtered_file"; then
+            echo "Blacklist filtering failed: pattern still present in filtered output."
+            exit 1
+          fi
+
+          filtered_count=$(grep -cve '^[[:space:]]*$' "$filtered_file" || true)
+          if [ "$filtered_count" -ge "$all_count" ]; then
+            echo "Expected fewer URLs after blacklist filtering."
+            echo "all_count=$all_count filtered_count=$filtered_count"
+            exit 1
+          fi

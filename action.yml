@@ -1,0 +1,55 @@
+name: "re3data Repository Scraper"
+description: "Scrape re3data by software and write matching repository URLs to a file."
+
+inputs:
+  software:
+    description: "String matched against the Software field of re3data records."
+    required: true
+  filename:
+    description: "Target file path where matching repository URLs are written (one URL per line)."
+    required: true
+  blacklist:
+    description: "Optional blacklist patterns (newline or comma separated). URLs containing any pattern are excluded."
+    required: false
+    default: ""
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.x"
+
+    - name: Scrape re3data
+      shell: bash
+      run: |
+        set -euo pipefail
+        python "${GITHUB_ACTION_PATH}/scrape.py" \
+          --software "${{ inputs.software }}" \
+          --filename "${{ inputs.filename }}" \
+          --blacklist "${{ inputs.blacklist }}"
+
+    - name: Commit changes
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        git config user.name "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+        git add "${{ inputs.filename }}"
+
+        if git diff --cached --quiet; then
+          echo "No changes to commit."
+          exit 0
+        fi
+
+        git commit -m "chore: update re3data URLs for software '${{ inputs.software }}'"
+
+        if [[ "${GITHUB_REF:-}" == refs/heads/* ]]; then
+          branch="${GITHUB_REF#refs/heads/}"
+          git push origin "HEAD:${branch}"
+        else
+          echo "GITHUB_REF is not a branch ref (${GITHUB_REF:-unset}); skipping push."
+        fi
