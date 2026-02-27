@@ -12,6 +12,10 @@ inputs:
     description: "Optional blacklist patterns (newline or comma separated). URLs containing any pattern are excluded."
     required: false
     default: ""
+  skip-commit:
+    description: "Set to true to skip git add/commit/push."
+    required: false
+    default: "false"
 
 runs:
   using: "composite"
@@ -31,6 +35,7 @@ runs:
           --blacklist "${{ inputs.blacklist }}"
 
     - name: Commit changes
+      if: ${{ inputs['skip-commit'] != 'true' }}
       shell: bash
       run: |
         set -euo pipefail

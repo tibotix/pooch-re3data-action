@@ -19,12 +19,10 @@ jobs:
       - name: Run action (no blacklist)
         id: run_unfiltered
         uses: ./
-        env:
-          # Prevent the composite action from pushing during validation.
-          GITHUB_REF: refs/pull/validate/merge
         with:
           software: Dataverse
           filename: tmp/all_urls.txt
+          skip-commit: "true"
 
       - name: Assert at least one URL is returned
         id: collect
@@ -56,13 +54,11 @@ jobs:
       - name: Run action (with blacklist)
         id: run_filtered
         uses: ./
-        env:
-          # Prevent the composite action from pushing during validation.
-          GITHUB_REF: refs/pull/validate/merge
         with:
           software: Dataverse
           filename: tmp/filtered_urls.txt
           blacklist: ${{ steps.collect.outputs.blacklist_pattern }}
+          skip-commit: "true"
 
       - name: Assert blacklist filtering
         shell: bash
