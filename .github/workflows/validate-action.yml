@@ -23,6 +23,7 @@ jobs:
           software: Dataverse
           filename: tmp/all_urls.txt
           skip-commit: "true"
+          sanitize-urls: false
 
       - name: Assert at least one URL is returned
         id: collect

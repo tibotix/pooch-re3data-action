@@ -98,6 +98,16 @@ def parse_blacklist_patterns(raw_value):
     return patterns
 
 
+def sanitize_repository_urls(urls: set[str]) -> set[str]:
+    sanitized_urls = set()
+    for url in urls:
+        parsed = urllib.parse.urlsplit(url)._replace(query="", fragment="")
+        if parsed.scheme == "http":
+            parsed = parsed._replace(scheme="https")
+        sanitized_urls.add(urllib.parse.urlunsplit(parsed))
+    return sanitized_urls
+
+
 def main():
     parser = argparse.ArgumentParser(
         description=(
@@ -123,6 +133,14 @@ def main():
             "Any URL containing one of these patterns is excluded."
         ),
     )
+    parser.add_argument(
+        "--sanitize-urls",
+        default=False,
+        action="store_true",
+        help=(
+            "Strip query and fragment parts of repository URLs and rewrite http schemes to https."
+        ),
+    )
     args = parser.parse_args()
 
     try:
@@ -142,6 +160,9 @@ def main():
 
         processed += 1
         repository_urls.update(extract_repository_urls(record_root))
+
+    if args.sanitize_urls:
+        repository_urls = sanitize_repository_urls(repository_urls)
 
     blacklist_patterns = parse_blacklist_patterns(args.blacklist)
     filtered_urls = [
